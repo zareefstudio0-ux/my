@@ -1,0 +1,713 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'dart:ui';
+import 'dart:math' as math;
+
+// UI Dependencies
+import 'package:iconly/iconly.dart';
+import 'package:carousel_slider/carousel_slider.dart';
+import 'package:device_preview/device_preview.dart';
+
+void main() {
+  runApp(
+    DevicePreview(
+      enabled: !kReleaseMode,
+      builder: (context) => const MyApp(),
+    ),
+  );
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      locale: DevicePreview.locale(context),
+      builder: DevicePreview.appBuilder,
+      debugShowCheckedModeBanner: false,
+      title: 'Cinematic Chess',
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF000000),
+        fontFamily: 'Roboto',
+      ),
+      home: const HomeScreen(),
+    );
+  }
+}
+
+// =============================================================================
+// 1. HOME SCREEN (Cinematic UI)
+// =============================================================================
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  int currentIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final Size size = MediaQuery.of(context).size;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF000000),
+      extendBody: true,
+      body: SingleChildScrollView(
+        physics: const ClampingScrollPhysics(),
+        padding: const EdgeInsets.only(bottom: 120),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Top Section with 3D Grid & Slider
+            Container(
+              decoration: const BoxDecoration(
+                color: Color(0xFF121215),
+                borderRadius: BorderRadius.vertical(bottom: Radius.circular(40)),
+              ),
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(40)),
+                child: Stack(
+                  children: [
+                    Positioned(
+                      bottom: 0, left: 0, right: 0,
+                      height: 180,
+                      child: ShaderMask(
+                        shaderCallback: (Rect bounds) {
+                          return const LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Colors.transparent, Colors.white],
+                            stops: [0.0, 0.6],
+                          ).createShader(bounds);
+                        },
+                        blendMode: BlendMode.dstIn,
+                        child: CustomPaint(painter: PerspectiveGridPainter()),
+                      ),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.only(
+                          top: MediaQuery.of(context).padding.top + 20,
+                          bottom: 45
+                      ),
+                      child: Column(
+                        children: [
+                          RichText(
+                            textAlign: TextAlign.center,
+                            text: const TextSpan(
+                              children: [
+                                TextSpan(
+                                    text: 'PLAY CHESS\n',
+                                    style: TextStyle(color: Color(0xFFE50914), fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: 2.5)
+                                ),
+                                TextSpan(
+                                    text: '2026',
+                                    style: TextStyle(fontSize: 38, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.0)
+                                ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(height: size.height * 0.03),
+                          CarouselSlider.builder(
+                            itemCount: sliderMovies.length,
+                            options: CarouselOptions(
+                              height: size.height * 0.32,
+                              viewportFraction: 0.65,
+                              enlargeCenterPage: true,
+                              enlargeFactor: 0.25,
+                              enableInfiniteScroll: true,
+                              initialPage: 1,
+                            ),
+                            itemBuilder: (context, index, realIndex) {
+                              return SliderMovieCard(movie: sliderMovies[index]);
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            SizedBox(height: size.height * 0.04),
+
+            // CHILL SECTION
+            const SectionHeader(title: "Chill"),
+            const SizedBox(height: 15),
+            SizedBox(
+              height: 180,
+              child: ListView.builder(
+                physics: const ClampingScrollPhysics(),
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                clipBehavior: Clip.none,
+                itemCount: chillModes.length,
+                itemBuilder: (context, index) => HorizontalChessCard(mode: chillModes[index]),
+              ),
+            ),
+
+            SizedBox(height: size.height * 0.04),
+
+            // FAST SECTION
+            const SectionHeader(title: "Fast"),
+            const SizedBox(height: 15),
+            SizedBox(
+              height: 180,
+              child: ListView.builder(
+                physics: const ClampingScrollPhysics(),
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                clipBehavior: Clip.none,
+                itemCount: fastModes.length,
+                itemBuilder: (context, index) => HorizontalChessCard(mode: fastModes[index]),
+              ),
+            ),
+
+            SizedBox(height: size.height * 0.04),
+
+            // FASTEST SECTION
+            const SectionHeader(title: "Fastest"),
+            const SizedBox(height: 15),
+            SizedBox(
+              height: 180,
+              child: ListView.builder(
+                physics: const ClampingScrollPhysics(),
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                clipBehavior: Clip.none,
+                itemCount: fastestModes.length,
+                itemBuilder: (context, index) => HorizontalChessCard(mode: fastestModes[index]),
+              ),
+            ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: GlassyGooeyNav(
+        currentIndex: currentIndex,
+        onTap: (index) => setState(() => currentIndex = index),
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// 2. GAME SCREEN UI ONLY (No Stockfish/ChessBoard Logic)
+// =============================================================================
+class GameScreen extends StatefulWidget {
+  const GameScreen({super.key});
+
+  @override
+  State<GameScreen> createState() => GameScreenState();
+}
+
+class GameScreenState extends State<GameScreen> {
+  bool isEngineThinking = false;
+
+  void showGameOverDialog(String message) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF2C160E),
+        title: Text(message, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        actions: [
+          TextButton(
+            onPressed: () {
+              setState(() { isEngineThinking = false; });
+              Navigator.pop(context);
+            },
+            child: const Text("Play Again", style: TextStyle(color: Colors.orange, fontSize: 16)),
+          )
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF4A2B1D), Color(0xFF2C160E)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              buildTopBar(context),
+              const Spacer(),
+              buildPlayerProfile(
+                name: "CPU (Easy)",
+                avatarUrl: "https://api.dicebear.com/7.x/bottts/png?seed=cpu",
+                isTop: true,
+                isThinking: isEngineThinking,
+              ),
+              Container(
+                width: MediaQuery.of(context).size.width,
+                height: MediaQuery.of(context).size.width,
+                decoration: BoxDecoration(
+                  boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 20, offset: Offset(0, 10))],
+                  border: Border.all(color: const Color(0xFF2B170B), width: 8),
+                  // Placeholder for the real board
+                  color: Colors.brown[400], 
+                ),
+                child: Center(
+                  child: Text(
+                    "Real Chess Logic Removed\n(UI Only)",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.brown[900], fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              buildPlayerProfile(
+                name: "Guest6367848",
+                rating: "(1009)",
+                avatarUrl: "https://api.dicebear.com/7.x/avataaars/png?seed=owl",
+                isTop: false,
+                isThinking: false,
+              ),
+              const Spacer(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget buildTopBar(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      color: Colors.black.withValues(alpha: 0.4),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          const Spacer(),
+          IconButton(
+              icon: const Icon(Icons.undo, color: Colors.white, size: 28),
+              onPressed: () {
+                setState(() { isEngineThinking = false; });
+              }
+          ),
+          IconButton(icon: const Icon(Icons.smart_toy, color: Colors.white, size: 28), onPressed: () {}),
+          IconButton(icon: const Icon(Icons.settings, color: Colors.white, size: 28), onPressed: () {}),
+        ],
+      ),
+    );
+  }
+
+  Widget buildPlayerProfile({
+    required String name,
+    String? rating,
+    required String avatarUrl,
+    required bool isTop,
+    required bool isThinking,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.3),
+        border: Border(
+          bottom: isTop ? BorderSide(color: Colors.black.withValues(alpha: 0.5), width: 2) : BorderSide.none,
+          top: !isTop ? BorderSide(color: Colors.black.withValues(alpha: 0.5), width: 2) : BorderSide.none,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48, height: 48,
+            decoration: BoxDecoration(
+              color: Colors.white, shape: BoxShape.circle, border: Border.all(color: Colors.black, width: 2),
+              image: DecorationImage(image: NetworkImage(avatarUrl), fit: BoxFit.cover),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Row(
+              children: [
+                Text(name, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                if (rating != null) ...[
+                  const SizedBox(width: 6),
+                  Text(rating, style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 14))
+                ],
+              ],
+            ),
+          ),
+          if (isThinking)
+            const SizedBox(
+              width: 20, height: 20,
+              child: CircularProgressIndicator(color: Colors.orange, strokeWidth: 2),
+            )
+        ],
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// 3. UI COMPONENTS & PAINTERS
+// =============================================================================
+
+class PerspectiveGridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.12)
+      ..strokeWidth = 1.2
+      ..style = PaintingStyle.stroke;
+
+    final double cx = size.width / 2;
+    final double h = size.height;
+    final double w = size.width;
+    final Offset vp = Offset(cx, -h * 0.8);
+
+    canvas.drawLine(vp, Offset(cx, h), paint);
+    canvas.drawLine(vp, Offset(cx - w * 0.35, h), paint);
+    canvas.drawLine(vp, Offset(cx + w * 0.35, h), paint);
+    canvas.drawLine(vp, Offset(cx - w * 0.85, h), paint);
+    canvas.drawLine(vp, Offset(cx + w * 0.85, h), paint);
+
+    List<double> yStops = [0.2, 0.4, 0.65, 0.85, 1.0];
+    for (double stop in yStops) {
+      canvas.drawLine(Offset(0, h * stop), Offset(w, h * stop), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class SectionHeader extends StatelessWidget {
+  final String title;
+  const SectionHeader({super.key, required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.5)),
+          Text("See all >", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.white.withValues(alpha: 0.5))),
+        ],
+      ),
+    );
+  }
+}
+
+class HorizontalChessCard extends StatelessWidget {
+  final ChessMode mode;
+  const HorizontalChessCard({super.key, required this.mode});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const GameScreen()));
+      },
+      child: Container(
+        width: 170,
+        margin: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          color: const Color(0xFF1E1E24),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Image.asset(mode.imagePath, fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => const Icon(Icons.image, size: 50, color: Colors.white24),
+              ),
+              Positioned(
+                bottom: 0, left: 0, right: 0, height: 80,
+                child: Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(colors: [Colors.transparent, Colors.black87], begin: Alignment.topCenter, end: Alignment.bottomCenter),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 12, left: 12,
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+                  child: const Icon(Icons.dashboard_customize_rounded, size: 14, color: Colors.black),
+                ),
+              ),
+              Positioned(
+                bottom: 0, left: 0, right: 0,
+                child: ClipRRect(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: Container(
+                      height: 55,
+                      padding: const EdgeInsets.only(left: 12, right: 8, top: 8, bottom: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(mode.title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white), overflow: TextOverflow.ellipsis),
+                                const SizedBox(height: 2),
+                                Text(mode.timeDesc, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: Colors.white.withValues(alpha: 0.8)), overflow: TextOverflow.ellipsis),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            width: 28, height: 28,
+                            decoration: BoxDecoration(color: const Color(0xFFE50914), borderRadius: BorderRadius.circular(8)),
+                            child: const Icon(Icons.play_arrow, size: 16, color: Colors.white),
+                          )
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class SliderMovieCard extends StatelessWidget {
+  final SliderMovie movie;
+  const SliderMovieCard({super.key, required this.movie});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GameScreen())),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(25),
+          boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 20, offset: Offset(0, 10))],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(25),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Container(
+                decoration: const BoxDecoration(gradient: LinearGradient(colors: [Color(0xFF2A2A30), Color(0xFF1A1A1D)])),
+                child: const Icon(Icons.emoji_events, size: 80, color: Colors.white12),
+              ),
+              Positioned(
+                bottom: 0, left: 0, right: 0, height: 150,
+                child: Container(
+                  decoration: const BoxDecoration(gradient: LinearGradient(colors: [Colors.transparent, Colors.black87], begin: Alignment.topCenter, end: Alignment.bottomCenter)),
+                ),
+              ),
+              Positioned(
+                bottom: 15, left: 15, right: 15,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.15), width: 1.5),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(child: Text(movie.title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold))),
+                              Row(children: [const Icon(Icons.star, color: Colors.amber, size: 16), const SizedBox(width: 4), Text(movie.rating, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13))]),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(child: Text("Event: ${movie.date}", style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 11))),
+                              SizedBox(
+                                height: 30,
+                                child: ElevatedButton(
+                                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GameScreen())),
+                                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B72E8), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), padding: const EdgeInsets.symmetric(horizontal: 12)),
+                                  child: const Text("Play", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class GlassyGooeyNav extends StatelessWidget {
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+
+  GlassyGooeyNav({super.key, required this.currentIndex, required this.onTap});
+
+  final List<IconData> lightIcons = [IconlyLight.home, IconlyLight.search, IconlyLight.category, IconlyLight.heart];
+  final List<IconData> boldIcons = [IconlyBold.home, IconlyBold.search, IconlyBold.category, IconlyBold.heart];
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double width = constraints.maxWidth;
+        const double navHeight = 75.0;
+        const double horizontalPadding = 20.0;
+        final double itemWidth = (width - (horizontalPadding * 2)) / 4;
+        final double targetX = horizontalPadding + (currentIndex * itemWidth) + (itemWidth / 2);
+
+        return ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              height: navHeight,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.08),
+                border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.1), width: 1)),
+              ),
+              child: Stack(
+                children: [
+                  TweenAnimationBuilder<double>(
+                    tween: Tween<double>(end: targetX),
+                    duration: const Duration(milliseconds: 350),
+                    curve: Curves.easeOutCubic,
+                    builder: (context, xOffset, child) {
+                      return CustomPaint(painter: DropletPainter(xOffset: xOffset), size: Size(width, navHeight));
+                    },
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: horizontalPadding),
+                    child: Row(
+                      children: List.generate(4, (index) {
+                        final isSelected = index == currentIndex;
+                        return GestureDetector(
+                          onTap: () => onTap(index),
+                          behavior: HitTestBehavior.opaque,
+                          child: SizedBox(
+                            width: itemWidth,
+                            height: navHeight,
+                            child: Center(
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 350),
+                                transform: Matrix4.translationValues(0, isSelected ? -1.5 : 0, 0),
+                                child: Icon(
+                                  isSelected ? boldIcons[index] : lightIcons[index],
+                                  color: isSelected ? Colors.white : Colors.white54,
+                                  size: 26,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class DropletPainter extends CustomPainter {
+  final double xOffset;
+  DropletPainter({required this.xOffset});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFF050505)
+      ..style = PaintingStyle.fill;
+    final path = Path();
+    double cx = xOffset;
+    const double radius = 24.0;
+    const double centerY = 32.0;
+
+    path.moveTo(cx - 40, 0);
+    path.cubicTo(cx - 4, 0, cx - radius, 20, cx - radius, centerY);
+    path.arcTo(Rect.fromCircle(center: Offset(cx, centerY), radius: radius), math.pi, -math.pi, false);
+    path.cubicTo(cx + radius, 20, cx + 4, 0, cx + 40, 0);
+    path.close();
+
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant DropletPainter oldDelegate) => oldDelegate.xOffset != xOffset;
+}
+
+// =============================================================================
+// 4. DATA MODELS & DUMMY DATA
+// =============================================================================
+
+class ChessMode {
+  final String title, timeDesc, imagePath;
+  ChessMode({required this.title, required this.timeDesc, required this.imagePath});
+}
+
+class SliderMovie {
+  final String title, date, rating;
+  SliderMovie({required this.title, required this.date, required this.rating});
+}
+
+final List<ChessMode> chillModes = [
+  ChessMode(title: "Rapid", timeDesc: "10 minutes", imagePath: "assets/chill/rapid.png"),
+  ChessMode(title: "Classic", timeDesc: "60 secs/move", imagePath: "assets/chill/classic.png"),
+];
+
+final List<ChessMode> fastModes = [
+  ChessMode(title: "Blitz", timeDesc: "5 minutes", imagePath: "assets/fast/blitz5.png"),
+  ChessMode(title: "Blitz", timeDesc: "3 minutes", imagePath: "assets/fast/blitz3.png"),
+];
+
+final List<ChessMode> fastestModes = [
+  ChessMode(title: "Tempo", timeDesc: "20 secs/move", imagePath: "assets/fastest/tempo.png"),
+  ChessMode(title: "Bullet", timeDesc: "2 minutes", imagePath: "assets/fastest/bullet.png"),
+];
+
+final List<SliderMovie> sliderMovies = [
+  SliderMovie(title: "Grandmaster Cup", date: "March 11", rating: "4.9"),
+  SliderMovie(title: "Blitz Championship", date: "January 28", rating: "4.7"),
+  SliderMovie(title: "World Bullet", date: "April 05", rating: "4.8"),
+];

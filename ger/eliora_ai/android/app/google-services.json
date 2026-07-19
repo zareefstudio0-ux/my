@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "95384065713",
+    "project_id": "newblock-835c4",
+    "storage_bucket": "newblock-835c4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:95384065713:android:425a5376b8fd71c2ccf490",
+        "android_client_info": {
+          "package_name": "com.waqasulhaqqureshi.eliora_ai"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDnT1kJJjK8a-lUK680wWlW2PAVM1YKyxQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

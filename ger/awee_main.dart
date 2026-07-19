@@ -1,0 +1,796 @@
+import 'package:flutter/material.dart';
+import 'package:chessground/chessground.dart' as cg;
+import 'package:dartchess/dartchess.dart' as dc;
+import 'package:fast_immutable_collections/fast_immutable_collections.dart';
+import 'package:stockfish/stockfish.dart';
+import 'package:random_avatar/random_avatar.dart';
+import 'package:country_pickers/country_pickers.dart';
+import 'package:country_pickers/country.dart';
+import 'package:fluttermoji/fluttermoji.dart';
+import 'dart:math' as math;
+import 'dart:async';
+
+void main() {
+  runApp(const MaterialApp(
+    debugShowCheckedModeBanner: false,
+    home: ModeSelectionScreen(),
+  ));
+}
+
+// =============================================================================
+// DATA MODELS
+// =============================================================================
+enum TimeControlType { standard, perMove }
+
+class ChessTimeMode {
+  final String title, subtitle;
+  final TimeControlType type;
+  final int baseTimeSeconds, incrementSeconds;
+  final IconData icon;
+  final Color iconColor;
+
+  const ChessTimeMode({
+    required this.title, required this.subtitle, required this.type,
+    required this.baseTimeSeconds, required this.incrementSeconds,
+    required this.icon, required this.iconColor,
+  });
+}
+
+final List<ChessTimeMode> gameModes = [
+  const ChessTimeMode(title: "Rapid", subtitle: "10 min", type: TimeControlType.standard, baseTimeSeconds: 600, incrementSeconds: 0, icon: Icons.timer, iconColor: Colors.orange),
+  const ChessTimeMode(title: "Chill", subtitle: "60 seconds/move", type: TimeControlType.perMove, baseTimeSeconds: 60, incrementSeconds: 0, icon: Icons.coffee, iconColor: Colors.brown),
+  const ChessTimeMode(title: "Blitz", subtitle: "5 min + 3 seconds/move", type: TimeControlType.standard, baseTimeSeconds: 300, incrementSeconds: 3, icon: Icons.bolt, iconColor: Colors.blue),
+  const ChessTimeMode(title: "Tempo", subtitle: "20 seconds/move", type: TimeControlType.perMove, baseTimeSeconds: 20, incrementSeconds: 0, icon: Icons.av_timer, iconColor: Colors.green),
+  const ChessTimeMode(title: "Blitz", subtitle: "3 min", type: TimeControlType.standard, baseTimeSeconds: 180, incrementSeconds: 0, icon: Icons.flash_on, iconColor: Colors.amber),
+  const ChessTimeMode(title: "Bullet", subtitle: "2 min + 1 second/move", type: TimeControlType.standard, baseTimeSeconds: 120, incrementSeconds: 1, icon: Icons.rocket_launch, iconColor: Colors.redAccent),
+];
+
+class UserProfile {
+  String name;
+  Country country;
+  int rating;
+  bool useFluttermoji;
+  String randomAvatarSeed;
+
+  UserProfile({
+    required this.name,
+    required this.country,
+    required this.rating,
+    this.useFluttermoji = true,
+    this.randomAvatarSeed = 'default_seed',
+  });
+}
+
+final cg.PieceAssets customPieces = IMap({
+  cg.PieceKind.blackRook: const AssetImage('assets/pieces/black/rook.png'),
+  cg.PieceKind.blackPawn: const AssetImage('assets/pieces/black/pawn.png'),
+  cg.PieceKind.blackKnight: const AssetImage('assets/pieces/black/knight.png'),
+  cg.PieceKind.blackBishop: const AssetImage('assets/pieces/black/bishop.png'),
+  cg.PieceKind.blackQueen: const AssetImage('assets/pieces/black/queen.png'),
+  cg.PieceKind.blackKing: const AssetImage('assets/pieces/black/king.png'),
+  cg.PieceKind.whiteRook: const AssetImage('assets/pieces/white/rook.png'),
+  cg.PieceKind.whitePawn: const AssetImage('assets/pieces/white/pawn.png'),
+  cg.PieceKind.whiteKnight: const AssetImage('assets/pieces/white/knight.png'),
+  cg.PieceKind.whiteBishop: const AssetImage('assets/pieces/white/bishop.png'),
+  cg.PieceKind.whiteQueen: const AssetImage('assets/pieces/white/queen.png'),
+  cg.PieceKind.whiteKing: const AssetImage('assets/pieces/white/king.png'),
+});
+
+// =============================================================================
+// 1. MODE SELECTION SCREEN
+// =============================================================================
+class ModeSelectionScreen extends StatefulWidget {
+  const ModeSelectionScreen({super.key});
+
+  @override
+  State<ModeSelectionScreen> createState() => _ModeSelectionScreenState();
+}
+
+class _ModeSelectionScreenState extends State<ModeSelectionScreen> {
+  int _selectedIndex = 0;
+  late UserProfile currentUser;
+
+  @override
+  void initState() {
+    super.initState();
+    currentUser = UserProfile(
+      name: "Guest5266287",
+      country: CountryPickerUtils.getCountryByIsoCode('PK'),
+      rating: 1000,
+    );
+  }
+
+  void _openProfileEditor() {
+    String tempName = currentUser.name;
+    Country tempCountry = currentUser.country;
+    bool tempUseFluttermoji = currentUser.useFluttermoji;
+    String tempSeed = currentUser.randomAvatarSeed;
+
+    showDialog(
+        context: context,
+        builder: (context) {
+          return StatefulBuilder(
+              builder: (context, setDialogState) {
+                return AlertDialog(
+                  backgroundColor: const Color(0xFF33637A),
+                  title: const Text("Edit Profile", style: TextStyle(color: Colors.white)),
+                  content: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircleAvatar(
+                          radius: 40,
+                          backgroundColor: Colors.white,
+                          child: ClipOval(
+                            child: tempUseFluttermoji
+                                ? FluttermojiCircleAvatar(radius: 40, backgroundColor: Colors.white)
+                                : RandomAvatar(tempSeed, width: 80, height: 80),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+                              onPressed: () {
+                                setDialogState(() {
+                                  tempUseFluttermoji = false;
+                                  tempSeed = "seed_${math.Random().nextInt(10000)}";
+                                });
+                              },
+                              child: const Text("Random", style: TextStyle(color: Colors.white, fontSize: 12)),
+                            ),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                              onPressed: () async {
+                                setDialogState(() => tempUseFluttermoji = true);
+                                await Navigator.push(context, MaterialPageRoute(
+                                    builder: (_) => Scaffold(
+                                      backgroundColor: const Color(0xFF2A5265),
+                                      appBar: AppBar(title: const Text("Customize Avatar"), backgroundColor: Colors.black45),
+                                      body: Center(child: FluttermojiCustomizer()),
+                                    )
+                                ));
+                                setDialogState((){}); // Refresh preview
+                              },
+                              child: const Text("Customize", style: TextStyle(color: Colors.white, fontSize: 12)),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          style: const TextStyle(color: Colors.white),
+                          decoration: const InputDecoration(labelText: "Username", labelStyle: TextStyle(color: Colors.white70), enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white54)), focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.orange))),
+                          controller: TextEditingController(text: tempName)..selection = TextSelection.fromPosition(TextPosition(offset: tempName.length)),
+                          onChanged: (val) => tempName = val,
+                        ),
+                        const SizedBox(height: 16),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text("Country", style: TextStyle(color: Colors.white70, fontSize: 12)),
+                          subtitle: Row(children: [CountryPickerUtils.getDefaultFlagImage(tempCountry), const SizedBox(width: 8), Expanded(child: Text(tempCountry.name, style: const TextStyle(color: Colors.white), overflow: TextOverflow.ellipsis))]),
+                          trailing: const Icon(Icons.edit, color: Colors.white54),
+                          onTap: () {
+                            showDialog(
+                              context: context,
+                              builder: (context) => Theme(
+                                data: ThemeData.dark(),
+                                child: CountryPickerDialog(
+                                  titlePadding: const EdgeInsets.all(8.0),
+                                  searchCursorColor: Colors.orange,
+                                  searchInputDecoration: const InputDecoration(hintText: 'Search...'),
+                                  isSearchable: true,
+                                  title: const Text('Select your country'),
+                                  onValuePicked: (Country country) => setDialogState(() => tempCountry = country),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel", style: TextStyle(color: Colors.white54))),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                      onPressed: () {
+                        setState(() {
+                          currentUser.name = tempName;
+                          currentUser.country = tempCountry;
+                          currentUser.useFluttermoji = tempUseFluttermoji;
+                          currentUser.randomAvatarSeed = tempSeed;
+                        });
+                        Navigator.pop(context);
+                      },
+                      child: const Text("Save", style: TextStyle(color: Colors.white)),
+                    ),
+                  ],
+                );
+              }
+          );
+        }
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF2A5265),
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            GestureDetector(
+              onTap: _openProfileEditor,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                color: Colors.black.withValues(alpha: 0.1),
+                child: Row(
+                  children: [
+                    Stack(
+                      children: [
+                        CircleAvatar(
+                            radius: 24,
+                            backgroundColor: Colors.white,
+                            child: ClipOval(
+                              child: currentUser.useFluttermoji
+                                  ? FluttermojiCircleAvatar(radius: 24, backgroundColor: Colors.white)
+                                  : RandomAvatar(currentUser.randomAvatarSeed, width: 48, height: 48),
+                            )
+                        ),
+                        Positioned(bottom: 0, right: 0, child: Container(decoration: BoxDecoration(border: Border.all(color: const Color(0xFF2A5265), width: 2)), width: 20, height: 15, child: CountryPickerUtils.getDefaultFlagImage(currentUser.country))),
+                      ],
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(children: [const CircleAvatar(radius: 6, backgroundColor: Colors.greenAccent), const SizedBox(width: 8), Text(currentUser.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white))]),
+                        const SizedBox(height: 4),
+                        Row(children: [const Icon(Icons.bar_chart, color: Colors.deepOrange, size: 16), const SizedBox(width: 4), Text("${currentUser.rating}", style: TextStyle(fontSize: 14, color: Colors.white.withValues(alpha: 0.8)))]),
+                      ],
+                    ),
+                    const Spacer(),
+                    const Icon(Icons.edit, color: Colors.white54, size: 20),
+                  ],
+                ),
+              ),
+            ),
+            const Padding(padding: EdgeInsets.all(16.0), child: Text("Play Online", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.orange))),
+            Expanded(
+              child: GridView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 2.1),
+                itemCount: gameModes.length,
+                itemBuilder: (context, index) {
+                  final mode = gameModes[index];
+                  final isSelected = _selectedIndex == index;
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedIndex = index),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: isSelected ? const Color(0xFF3B7A75) : const Color(0xFF33637A), borderRadius: BorderRadius.circular(16), border: Border.all(color: isSelected ? Colors.greenAccent : Colors.transparent, width: 2)),
+                      child: Stack(
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Row(children: [Icon(mode.icon, color: mode.iconColor, size: 24), const SizedBox(width: 8), Text(mode.title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold))]),
+                              const SizedBox(height: 4),
+                              Text(mode.subtitle, style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12)),
+                            ],
+                          ),
+                          if (isSelected) const Positioned(top: 0, right: 0, child: Icon(Icons.check_circle, color: Colors.greenAccent, size: 20))
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: SizedBox(
+                width: double.infinity, height: 60,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orange.shade600, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => GameLogicArena(timeMode: gameModes[_selectedIndex], userProfile: currentUser))),
+                  child: const Text("Play", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// 2. THE ARENA LOGIC MODULE
+// =============================================================================
+class GameLogicArena extends StatefulWidget {
+  final ChessTimeMode timeMode;
+  final UserProfile userProfile;
+
+  const GameLogicArena({super.key, required this.timeMode, required this.userProfile});
+
+  @override
+  State<GameLogicArena> createState() => _GameLogicArenaState();
+}
+
+class _GameLogicArenaState extends State<GameLogicArena> {
+  late dc.Position position;
+  cg.Move? lastMove;
+
+  late Stockfish stockfish;
+  bool _isEngineThinking = false;
+
+  int _cpuSkillLevel = 0;
+  Timer? _timer;
+  bool _gameStarted = false;
+  late int _whiteTimeSeconds;
+  late int _blackTimeSeconds;
+
+  @override
+  void initState() {
+    super.initState();
+    position = dc.Chess.fromSetup(dc.Setup.standard);
+
+    _whiteTimeSeconds = widget.timeMode.baseTimeSeconds;
+    _blackTimeSeconds = widget.timeMode.baseTimeSeconds;
+
+    stockfish = Stockfish();
+    stockfish.state.addListener(_onStockfishStateChanged);
+    stockfish.stdout.listen((line) {
+      if (line.startsWith('bestmove')) {
+        final parts = line.split(' ');
+        if (parts.length > 1) {
+          final bestMove = parts[1];
+          _executeEngineMove(bestMove);
+        }
+      }
+    });
+  }
+
+  void _onStockfishStateChanged() {
+    if (stockfish.state.value == StockfishState.ready) {
+      stockfish.stdin = 'uci';
+      stockfish.stdin = 'isready';
+      stockfish.stdin = 'setoption name Skill Level value $_cpuSkillLevel';
+    }
+  }
+
+  void _changeDifficulty(int newLevel) {
+    setState(() => _cpuSkillLevel = newLevel);
+    if (stockfish.state.value == StockfishState.ready) {
+      stockfish.stdin = 'setoption name Skill Level value $newLevel';
+    }
+  }
+
+  String get _cpuDifficultyName {
+    if (_cpuSkillLevel <= 2) return "Easy";
+    if (_cpuSkillLevel <= 6) return "Medium";
+    if (_cpuSkillLevel <= 12) return "Hard";
+    if (_cpuSkillLevel <= 16) return "Master";
+    return "Grandmaster";
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    stockfish.state.removeListener(_onStockfishStateChanged);
+    if (stockfish.state.value == StockfishState.ready || stockfish.state.value == StockfishState.starting) {
+      stockfish.stdin = 'quit';
+    }
+    super.dispose();
+  }
+
+  void _startClock() {
+    if (_timer != null && _timer!.isActive) return;
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        if (position.turn == dc.Side.white) {
+          _whiteTimeSeconds--;
+          if (_whiteTimeSeconds <= 0) _handleTimeout("White out of time! CPU Wins.");
+        } else {
+          _blackTimeSeconds--;
+          if (_blackTimeSeconds <= 0) _handleTimeout("CPU out of time! You Win.");
+        }
+      });
+    });
+  }
+
+  void _handleTimeout(String message) {
+    _timer?.cancel();
+    _showGameOverDialog(message);
+  }
+
+  void _onTurnCompleted(dc.Side sideThatJustMoved) {
+    if (widget.timeMode.type == TimeControlType.perMove) {
+      if (sideThatJustMoved == dc.Side.white) {
+        _whiteTimeSeconds = widget.timeMode.baseTimeSeconds;
+      } else {
+        _blackTimeSeconds = widget.timeMode.baseTimeSeconds;
+      }
+    } else {
+      if (sideThatJustMoved == dc.Side.white) {
+        _whiteTimeSeconds += widget.timeMode.incrementSeconds;
+      } else {
+        _blackTimeSeconds += widget.timeMode.incrementSeconds;
+      }
+    }
+  }
+
+  String _formatTime(int seconds) {
+    int m = seconds ~/ 60;
+    int s = seconds % 60;
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
+  cg.ValidMoves _getValidMoves() {
+    Map<cg.SquareId, ISet<cg.SquareId>> movesMap = {};
+    for (final sq in position.board.bySide(position.turn).squares) {
+      final legalMoves = position.legalMovesOf(sq);
+      if (legalMoves.isNotEmpty) {
+        movesMap[sq.name] = legalMoves.squares.map((s) => s.name).toISet();
+      }
+    }
+    return movesMap.toIMap();
+  }
+
+  String _roleToUciChar(cg.Role role) {
+    switch (role) {
+      case cg.Role.queen: return 'q';
+      case cg.Role.rook: return 'r';
+      case cg.Role.bishop: return 'b';
+      case cg.Role.knight: return 'n';
+      default: return 'q';
+    }
+  }
+
+  cg.Role _uciCharToRole(String c) {
+    switch (c) {
+      case 'q': return cg.Role.queen;
+      case 'r': return cg.Role.rook;
+      case 'b': return cg.Role.bishop;
+      case 'n': return cg.Role.knight;
+      default: return cg.Role.queen;
+    }
+  }
+
+  void _onUserMove(cg.Move cgMove, {bool? isDrop, bool? isPremove}) {
+    final promoStr = cgMove.promotion != null ? _roleToUciChar(cgMove.promotion!) : '';
+    final moveStr = '${cgMove.from}${cgMove.to}$promoStr';
+
+    try {
+      final dcMove = dc.NormalMove.fromUci(moveStr);
+      if (position.isLegal(dcMove)) {
+        setState(() {
+          if (!_gameStarted) {
+            _gameStarted = true;
+            _startClock();
+          }
+
+          position = position.playUnchecked(dcMove);
+          lastMove = cgMove;
+          _onTurnCompleted(dc.Side.white);
+
+          _checkGameStateAndTriggerAI();
+        });
+      }
+    } catch (e) {
+      debugPrint("Invalid move: $e");
+    }
+  }
+
+  void _checkGameStateAndTriggerAI() {
+    if (position.isCheckmate) {
+      _timer?.cancel();
+      _showGameOverDialog("Checkmate! Game Over.");
+      return;
+    } else if (position.isStalemate || position.halfmoves >= 100) {
+      _timer?.cancel();
+      _showGameOverDialog("Draw!");
+      return;
+    }
+
+    if (position.turn == dc.Side.black && !_isEngineThinking) {
+      setState(() => _isEngineThinking = true);
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (stockfish.state.value == StockfishState.ready) {
+          stockfish.stdin = 'position fen ${position.fen}';
+          stockfish.stdin = 'go movetime 1000';
+        } else {
+          if (mounted) setState(() => _isEngineThinking = false);
+        }
+      });
+    }
+  }
+
+  void _executeEngineMove(String move) {
+    if (!mounted) return;
+    final dcMove = dc.NormalMove.fromUci(move);
+    cg.Role? promotion;
+    if (move.length > 4) promotion = _uciCharToRole(move[4]);
+    final cgMove = cg.Move(from: move.substring(0, 2), to: move.substring(2, 4), promotion: promotion);
+
+    setState(() {
+      position = position.playUnchecked(dcMove);
+      lastMove = cgMove;
+      _onTurnCompleted(dc.Side.black);
+
+      _isEngineThinking = false;
+      _checkGameStateAndTriggerAI();
+    });
+  }
+
+  void _showGameOverDialog(String message) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF2C160E),
+        title: Text(message, style: const TextStyle(color: Colors.white)),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pop(context);
+            },
+            child: const Text("Exit to Menu", style: TextStyle(color: Colors.orange)),
+          )
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final boardData = cg.BoardData(
+      interactableSide: _isEngineThinking ? cg.InteractableSide.none : cg.InteractableSide.white,
+      orientation: cg.Side.white,
+      fen: position.fen,
+      sideToMove: position.turn == dc.Side.white ? cg.Side.white : cg.Side.black,
+      lastMove: lastMove,
+      validMoves: _getValidMoves(),
+      isCheck: position.isCheck,
+    );
+
+    final isWhiteTurn = position.turn == dc.Side.white;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF4A3424),
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildTopBar(context),
+
+            // CPU Profile
+            _buildPlayerContainer(
+              name: "CPU",
+              rating: "($_cpuDifficultyName)",
+              avatarWidget: Image.network("https://api.dicebear.com/7.x/bottts/png?seed=cpu_bot_master_${_cpuSkillLevel}", width: 52, height: 52),
+              flagWidget: CountryPickerUtils.getDefaultFlagImage(CountryPickerUtils.getCountryByIsoCode('US')),
+              timeString: _formatTime(_blackTimeSeconds),
+              isActive: !isWhiteTurn && _gameStarted,
+              isTopPlayer: true,
+            ),
+
+            LayoutBuilder(
+                builder: (context, constraints) {
+                  final double rawInnerSize = math.min(constraints.maxWidth, constraints.maxHeight * 0.55);
+                  final double innerSize = (rawInnerSize ~/ 8) * 8.0;
+
+                  return SizedBox(
+                    width: innerSize,
+                    height: innerSize,
+                    child: cg.Board(
+                      size: innerSize,
+                      data: boardData,
+                      onMove: _onUserMove,
+                      settings: cg.BoardSettings(
+                        colorScheme: cg.BoardColorScheme.brown,
+                        pieceAssets: customPieces,
+                      ),
+                    ),
+                  );
+                }
+            ),
+
+            // User Profile
+            _buildPlayerContainer(
+              name: widget.userProfile.name,
+              rating: "(${widget.userProfile.rating})",
+              avatarWidget: widget.userProfile.useFluttermoji
+                  ? FluttermojiCircleAvatar(radius: 26, backgroundColor: Colors.white)
+                  : RandomAvatar(widget.userProfile.randomAvatarSeed, width: 52, height: 52),
+              flagWidget: CountryPickerUtils.getDefaultFlagImage(widget.userProfile.country),
+              timeString: _formatTime(_whiteTimeSeconds),
+              isActive: isWhiteTurn && _gameStarted,
+              isTopPlayer: false,
+            ),
+
+            // THIS PUSHES EVERYTHING TIGHT TO THE TOP APPBAR!
+            const Spacer(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopBar(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: const Color(0xFF2C160E),
+      child: Row(
+        children: [
+          IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28), onPressed: () => Navigator.of(context).pop()),
+          const Spacer(),
+          PopupMenuButton<int>(
+            icon: const Icon(Icons.psychology, color: Colors.white, size: 28),
+            tooltip: "Change CPU Difficulty",
+            color: const Color(0xFF2C160E),
+            onSelected: _changeDifficulty,
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 0, child: Text("Easy (0)", style: TextStyle(color: Colors.white))),
+              PopupMenuItem(value: 5, child: Text("Medium (5)", style: TextStyle(color: Colors.white))),
+              PopupMenuItem(value: 10, child: Text("Hard (10)", style: TextStyle(color: Colors.white))),
+              PopupMenuItem(value: 15, child: Text("Master (15)", style: TextStyle(color: Colors.white))),
+              PopupMenuItem(value: 20, child: Text("Grandmaster (20)", style: TextStyle(color: Colors.white))),
+            ],
+          ),
+          IconButton(icon: const Icon(Icons.chat_bubble_outline, color: Colors.white, size: 28), onPressed: (){}),
+          IconButton(icon: const Icon(Icons.list, color: Colors.white, size: 30), onPressed: () {}),
+        ],
+      ),
+    );
+  }
+
+  int _countChar(String s, String c) => s.split('').where((char) => char == c).length;
+
+  int _getScore(String fen, bool isWhite) {
+    int score = 0;
+    score += _countChar(fen, isWhite ? 'P' : 'p') * 1;
+    score += _countChar(fen, isWhite ? 'N' : 'n') * 3;
+    score += _countChar(fen, isWhite ? 'B' : 'b') * 3;
+    score += _countChar(fen, isWhite ? 'R' : 'r') * 5;
+    score += _countChar(fen, isWhite ? 'Q' : 'q') * 9;
+    return score;
+  }
+
+  Widget _buildCapturedPieces(bool isBottomPlayer) {
+    String fen = position.fen.split(' ')[0];
+    bool capturingBlack = isBottomPlayer;
+
+    String pChar = capturingBlack ? 'p' : 'P';
+    String nChar = capturingBlack ? 'n' : 'N';
+    String bChar = capturingBlack ? 'b' : 'B';
+    String rChar = capturingBlack ? 'r' : 'R';
+    String qChar = capturingBlack ? 'q' : 'Q';
+
+    int missingP = math.max(0, 8 - _countChar(fen, pChar));
+    int missingN = math.max(0, 2 - _countChar(fen, nChar));
+    int missingB = math.max(0, 2 - _countChar(fen, bChar));
+    int missingR = math.max(0, 2 - _countChar(fen, rChar));
+    int missingQ = math.max(0, 1 - _countChar(fen, qChar));
+
+    String prefix = capturingBlack ? 'assets/pieces/black' : 'assets/pieces/white';
+
+    // Grouping logic: Shows [Icon]x2 to prevent overflow!
+    Widget pieceGroup(String name, int count) {
+      if (count == 0) return const SizedBox.shrink();
+      return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset('$prefix/$name.png', width: 18, height: 18),
+            if (count > 1)
+              Text('$count', style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
+            const SizedBox(width: 4),
+          ]
+      );
+    }
+
+    int whiteScore = _getScore(fen, true);
+    int blackScore = _getScore(fen, false);
+    int advantage = isBottomPlayer ? (whiteScore - blackScore) : (blackScore - whiteScore);
+
+    return Row(
+      children: [
+        pieceGroup('pawn', missingP),
+        pieceGroup('knight', missingN),
+        pieceGroup('bishop', missingB),
+        pieceGroup('rook', missingR),
+        pieceGroup('queen', missingQ),
+        if (advantage > 0) ...[
+          const SizedBox(width: 4),
+          Text("+$advantage", style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold))
+        ]
+      ],
+    );
+  }
+
+  Widget _buildPlayerContainer({
+    required String name,
+    required String rating,
+    required Widget avatarWidget,
+    required Widget flagWidget,
+    required String timeString,
+    required bool isActive,
+    required bool isTopPlayer,
+  }) {
+    // 🪄 THE FIX: Transparent background for inactive players
+    final bgColor = isActive ? const Color(0xFFB5702A) : Colors.transparent;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      color: bgColor,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Stack(
+            children: [
+              CircleAvatar(
+                radius: 26,
+                backgroundColor: Colors.white,
+                child: ClipOval(child: avatarWidget),
+              ),
+              Positioned(
+                bottom: 0, right: 0,
+                child: Container(
+                  width: 20, height: 15,
+                  decoration: BoxDecoration(border: Border.all(color: Colors.white, width: 1.5)),
+                  child: flagWidget,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 14),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text(name, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(width: 6),
+                    Text(rating, style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 14)),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(Icons.schedule, color: isActive ? Colors.white : Colors.white70, size: 18),
+                    const SizedBox(width: 6),
+                    Text(
+                        timeString,
+                        style: TextStyle(
+                            color: isActive ? Colors.white : Colors.white70,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold
+                        )
+                    ),
+                    if (!_gameStarted) ...[
+                      const SizedBox(width: 6),
+                      Text("(First move)", style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 12))
+                    ] else ...[
+                      const SizedBox(width: 12),
+                      _buildCapturedPieces(!isTopPlayer),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

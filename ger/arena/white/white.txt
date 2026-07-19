@@ -1,0 +1,567 @@
+import 'dart:ui';
+import 'dart:math' as math;
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
+import 'package:iconly/iconly.dart';
+import 'package:carousel_slider/carousel_slider.dart';
+import 'package:device_preview/device_preview.dart';
+
+void main() {
+  runApp(
+    DevicePreview(
+      enabled: !kReleaseMode,
+      builder: (context) => const WhiteChessApp(),
+    ),
+  );
+}
+
+class WhiteChessApp extends StatelessWidget {
+  const WhiteChessApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+    ));
+
+    return MaterialApp(
+      locale: DevicePreview.locale(context),
+      builder: DevicePreview.appBuilder,
+      debugShowCheckedModeBanner: false,
+      title: 'Light Cinematic Chess',
+      theme: ThemeData(
+        brightness: Brightness.light,
+        fontFamily: 'Roboto',
+        scaffoldBackgroundColor: const Color(0xFFF3F1ED), 
+      ),
+      home: const WhiteHomeScreen(),
+    );
+  }
+}
+
+class WhiteHomeScreen extends StatefulWidget {
+  const WhiteHomeScreen({super.key});
+
+  @override
+  State<WhiteHomeScreen> createState() => _WhiteHomeScreenState();
+}
+
+class _WhiteHomeScreenState extends State<WhiteHomeScreen> {
+  int _currentIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
+    return Scaffold(
+      extendBody: true, 
+      
+      body: Stack(
+        children: [
+          // =================================================================
+          // 1. HERO BACKGROUND PICTURE HOLDER
+          // =================================================================
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            // Takes up nearly half the screen as requested
+            height: size.height * 0.55, 
+            child: Container(
+              decoration: const BoxDecoration(
+                // Placeholder Color instead of the gradient
+                color: Color(0xFFC0C8D0), 
+                borderRadius: BorderRadius.vertical(bottom: Radius.circular(45)),
+                boxShadow: [
+                  BoxShadow(color: Colors.black12, blurRadius: 20, offset: Offset(0, 5))
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(45)),
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.image_outlined, size: 60, color: Colors.black26),
+                      const SizedBox(height: 8),
+                      Text(
+                        "Hero Background Image\n(Will go under the Custom AppBar)", 
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.black.withValues(alpha: 0.4), fontWeight: FontWeight.bold)
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // =================================================================
+          // 2. SCROLLABLE CONTENT (Sits on top of the Background Picture)
+          // =================================================================
+          Positioned.fill(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              // Padding ensures content scrolls under the app bar and above the bottom nav
+              padding: EdgeInsets.only(
+                top: MediaQuery.of(context).padding.top + 100, 
+                bottom: 60
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 10),
+
+                  // THE KING CARD
+                  _buildHeroCard(),
+
+                  const SizedBox(height: 35),
+
+                  // GAME TYPES SECTION
+                  _buildSectionHeader("Game Types"),
+                  const SizedBox(height: 16),
+                  _buildHorizontalList([
+                    GameCardUI(title: "Classic", subtitle: "★ 4.9  👁 12M+ Players", imagePath: "assets/chill/classic.png"),
+                    GameCardUI(title: "Blitz", subtitle: "★ 4.8  👁 23M+ Players", imagePath: "assets/fast/blitz5.png"),
+                    GameCardUI(title: "Bullet", subtitle: "★ 4.7  👁 5M+ Players", imagePath: "assets/fastest/bullet.png"),
+                  ]),
+
+                  const SizedBox(height: 35),
+
+                  // NEW EPISODE SECTION
+                  _buildSectionHeader("New Episode"),
+                  const SizedBox(height: 16),
+                  _buildHorizontalList([
+                    GameCardUI(title: "Puzzle", subtitle: "Daily Challenge", imagePath: "assets/chill/rapid.png"),
+                    GameCardUI(title: "Tactics", subtitle: "Midgame Mastery", imagePath: "assets/fastest/tempo.png"),
+                  ]),
+                ],
+              ),
+            ),
+          ),
+
+          // =================================================================
+          // 3. USER PROFILE HEADER (Custom App Bar with Frosted Glass)
+          // =================================================================
+          Positioned(
+            top: 0, left: 0, right: 0,
+            child: _buildCustomAppBar(),
+          ),
+        ],
+      ),
+      
+      // =================================================================
+      // 4. FLOATING BOTTOM NAVIGATION MENU
+      // =================================================================
+      bottomNavigationBar: LightGlassyGooeyNav(
+        currentIndex: _currentIndex,
+        onTap: (index) => setState(() => _currentIndex = index),
+      ),
+    );
+  }
+
+  // --- 1. USER PROFILE HEADER (Custom App Bar) ---
+  Widget _buildCustomAppBar() {
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(30)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          // SafeArea allows the background image to flow UNDER the transparent status bar
+          padding: EdgeInsets.only(
+            top: MediaQuery.of(context).padding.top + 16, 
+            bottom: 20, left: 24, right: 24
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.25), 
+            border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.4), width: 1.5)),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 20, offset: const Offset(0, 5))],
+          ),
+          child: Row(
+            children: [
+              // Avatar + Flag + Online Dot
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 54, height: 54,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                      image: const DecorationImage(
+                        image: NetworkImage("https://api.dicebear.com/7.x/adventurer-neutral/png?seed=Lily"), 
+                        fit: BoxFit.cover
+                      )
+                    ),
+                  ),
+                  Positioned(
+                    bottom: -2, right: -4,
+                    child: Container(
+                      decoration: BoxDecoration(border: Border.all(color: Colors.white, width: 1.5)),
+                      child: Image.network("https://flagcdn.com/w20/pk.png", width: 18, height: 13, fit: BoxFit.cover),
+                    ),
+                  )
+                ],
+              ),
+              const SizedBox(width: 16),
+              
+              // Username & Stats
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Row(
+                      children: [
+                        CircleAvatar(radius: 5, backgroundColor: Color(0xFF34D399)), 
+                        SizedBox(width: 8),
+                        Text("Guest5266287", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 0.5)),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        const Icon(Icons.bar_chart, color: Color(0xFFF97316), size: 18), 
+                        const SizedBox(width: 4),
+                        const Text("1002", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+                        const SizedBox(width: 16),
+                        const Icon(Icons.diamond, color: Color(0xFFEF4444), size: 18), 
+                        const SizedBox(width: 4),
+                        const Text("0", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Right-side Custom Glass Button
+              Container(
+                width: 46, height: 46,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 1.5),
+                ),
+                child: const Icon(IconlyLight.chart, color: Colors.white, size: 24),
+              )
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --- 2. HERO CAROUSEL SECTION ---
+  Widget _buildHeroCard() {
+    return Center(
+      child: Container(
+        width: MediaQuery.of(context).size.width * 0.85,
+        height: MediaQuery.of(context).size.height * 0.38,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(36),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 25, offset: const Offset(0, 15))],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(36),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.25),
+                borderRadius: BorderRadius.circular(36),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 2),
+              ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  CustomPaint(painter: CheckerboardPainter()),
+                  
+                  // 3D White King Placeholder
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 20),
+                      child: Image.asset(
+                        'assets/pieces/white/king.png', 
+                        height: 140,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_,__,___) => const Icon(Icons.sports_esports, size: 100, color: Colors.white70),
+                      ),
+                    ),
+                  ),
+                  
+                  // Faint pieces row at the bottom
+                  Positioned(
+                    bottom: 85, left: 20, right: 20,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: List.generate(8, (index) => Icon(Icons.person, color: Colors.white.withValues(alpha: 0.25), size: 24)),
+                    ),
+                  ),
+                  
+                  // "KING" text overlay
+                  Center(
+                    child: Text(
+                      "KING",
+                      style: TextStyle(
+                        fontSize: 56,
+                        fontFamily: 'Times New Roman', 
+                        fontWeight: FontWeight.w400,
+                        letterSpacing: 12.0,
+                        color: Colors.white.withValues(alpha: 0.95),
+                        shadows: [Shadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 10)],
+                      ),
+                    ),
+                  ),
+
+                  // Bottom Floating Pill: "Piece Mastery [Learn]"
+                  Positioned(
+                    bottom: 24, left: 0, right: 0,
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.only(left: 20, right: 8, top: 8, bottom: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.85),
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 4))],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text("Piece Mastery", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
+                            const SizedBox(width: 14),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF33587A), 
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: const Text("Learn", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                            )
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --- SECTION HEADER ---
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.black87)),
+          Row(
+            children: [
+              Text("See all", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey.shade800)),
+              const SizedBox(width: 2),
+              Icon(Icons.play_arrow, size: 12, color: Colors.grey.shade800),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- HORIZONTAL CARD LIST ---
+  Widget _buildHorizontalList(List<GameCardUI> cards) {
+    return SizedBox(
+      height: 160,
+      child: ListView.builder(
+        physics: const BouncingScrollPhysics(),
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: cards.length,
+        itemBuilder: (context, index) {
+          final card = cards[index];
+          return Container(
+            width: 150,
+            margin: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(24),
+              color: Colors.grey[800],
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 5))],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.asset(card.imagePath, fit: BoxFit.cover, errorBuilder: (_,__,___) => const Icon(Icons.image, color: Colors.white24, size: 50)),
+                  
+                  Positioned(
+                    bottom: 0, left: 0, right: 0, height: 75,
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(colors: [Colors.transparent, Colors.black87], begin: Alignment.topCenter, end: Alignment.bottomCenter),
+                      ),
+                    ),
+                  ),
+                  
+                  Positioned(
+                    bottom: 14, left: 14, right: 12,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(card.title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 3),
+                        Text(card.subtitle, style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 10, fontWeight: FontWeight.w500)),
+                      ],
+                    ),
+                  )
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class GameCardUI {
+  final String title, subtitle, imagePath;
+  GameCardUI({required this.title, required this.subtitle, required this.imagePath});
+}
+
+class CheckerboardPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = Colors.white.withValues(alpha: 0.5);
+    final double squareSize = size.width / 8;
+    for (int i = 0; i < 8; i++) {
+      for (int j = 0; j < 5; j++) { 
+        if ((i + j) % 2 == 0) {
+          final double opacity = 1.0 - (j / 5.0);
+          paint.color = Colors.white.withValues(alpha: 0.5 * opacity);
+          canvas.drawRect(Rect.fromLTWH(i * squareSize, j * squareSize, squareSize, squareSize), paint);
+        }
+      }
+    }
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// =============================================================================
+// LIGHT THEMED GOOEY NAVBAR
+// =============================================================================
+class LightGlassyGooeyNav extends StatelessWidget {
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+
+  LightGlassyGooeyNav({super.key, required this.currentIndex, required this.onTap});
+
+  final List<IconData> lightIcons = [IconlyLight.home, IconlyLight.search, Icons.leaderboard_outlined, IconlyLight.setting];
+  final List<IconData> boldIcons = [IconlyBold.home, IconlyBold.search, Icons.leaderboard, IconlyBold.setting];
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double width = constraints.maxWidth;
+        const double navHeight = 85.0;
+        const double horizontalPadding = 20.0;
+        final double itemWidth = (width - (horizontalPadding * 2)) / 4;
+        final double targetX = horizontalPadding + (currentIndex * itemWidth) + (itemWidth / 2);
+
+        return ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(40)),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+            child: Container(
+              height: navHeight,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.7), 
+                border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.9), width: 1.5)),
+              ),
+              child: Stack(
+                children: [
+                  TweenAnimationBuilder<double>(
+                    tween: Tween<double>(end: targetX),
+                    duration: const Duration(milliseconds: 350),
+                    curve: Curves.easeOutCubic,
+                    builder: (context, xOffset, child) {
+                      return CustomPaint(painter: WhiteDropletPainter(xOffset: xOffset), size: Size(width, navHeight));
+                    },
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: horizontalPadding),
+                    child: Row(
+                      children: List.generate(4, (index) {
+                        final isSelected = index == currentIndex;
+                        return GestureDetector(
+                          onTap: () => onTap(index),
+                          behavior: HitTestBehavior.opaque,
+                          child: SizedBox(
+                            width: itemWidth,
+                            height: navHeight,
+                            child: Center(
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 350),
+                                transform: Matrix4.translationValues(0, isSelected ? -4.0 : 0, 0),
+                                child: Icon(
+                                  isSelected ? boldIcons[index] : lightIcons[index],
+                                  color: isSelected ? const Color(0xFF2A5265) : Colors.grey.shade500,
+                                  size: 28,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class WhiteDropletPainter extends CustomPainter {
+  final double xOffset;
+  WhiteDropletPainter({required this.xOffset});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white 
+      ..style = PaintingStyle.fill;
+    
+    final shadowPaint = Paint()
+      ..color = Colors.black.withValues(alpha: 0.08)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+
+    final path = Path();
+    double cx = xOffset;
+    const double radius = 26.0;
+    const double centerY = 36.0;
+
+    path.moveTo(cx - 50, 0);
+    path.cubicTo(cx - 20, 0, cx - 22, 20, cx - radius, centerY);
+    path.arcTo(Rect.fromCircle(center: Offset(cx, centerY), radius: radius), math.pi, -math.pi, false);
+    path.cubicTo(cx + 22, 20, cx + 20, 0, cx + 50, 0);
+    path.close();
+
+    canvas.drawPath(path, shadowPaint); 
+    canvas.drawPath(path, paint);       
+  }
+
+  @override
+  bool shouldRepaint(covariant WhiteDropletPainter oldDelegate) => oldDelegate.xOffset != xOffset;
+}
